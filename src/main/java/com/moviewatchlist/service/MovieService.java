@@ -4,8 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moviewatchlist.model.Movie;
 import com.moviewatchlist.repository.MovieRepository;
-
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -17,7 +18,6 @@ import java.net.http.HttpResponse;
 public class MovieService {
     private final MovieRepository repo;
     private final ImageService imageService;
-
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Value("${omdb.api.key}")
@@ -29,16 +29,16 @@ public class MovieService {
     }
 
     public void addMovie(String title) {
-        Movie movie = fetchFromOMDb(title);           // OMDb
-        String imagePath = imageService.fetchImage(title); // TMDB
+        Movie movie = fetchFromOMDb(title);
+        String imagePath = imageService.fetchImage(title);
         movie.setImagePath(imagePath);
         repo.save(movie);
     }
 
     public Movie fetchFromOMDb(String title) {
         try {
-            String url = String.format("https://www.omdbapi.com/?t=%s&apikey=%s", 
-                                       title.replace(" ", "+"), omdbApiKey);
+            String url = String.format("https://www.omdbapi.com/?t=%s&apikey=%s",
+                    title.replace(" ", "+"), omdbApiKey);
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -57,7 +57,7 @@ public class MovieService {
             return Movie.builder()
                     .title(json.get("Title").asText())
                     .director(json.get("Director").asText())
-                    .year(json.get("Year").asText())
+                    .release_year(json.get("Year").asText())
                     .genre(json.get("Genre").asText())
                     .watched(false)
                     .rating(0)
@@ -67,6 +67,24 @@ public class MovieService {
             throw new RuntimeException("Failed to fetch from OMDb: " + e.getMessage(), e);
         }
     }
+
+    public Page<Movie> getAllMovies(int page, int size) {
+        return repo.findAll(PageRequest.of(page, size));
+    }
+
+    public void updateWatched(Long id, boolean watched) {
+        Movie movie = repo.findById(id).orElseThrow();
+        movie.setWatched(watched);
+        repo.save(movie);
+    }
+
+    public void updateRating(Long id, int rating) {
+        Movie movie = repo.findById(id).orElseThrow();
+        movie.setRating(rating);
+        repo.save(movie);
+    }
+
+    public void deleteMovie(Long id) {
+        repo.deleteById(id);
+    }
 }
-
-

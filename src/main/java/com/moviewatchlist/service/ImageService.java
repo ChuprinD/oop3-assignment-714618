@@ -24,27 +24,35 @@ public class ImageService {
 
     public String fetchImage(String title) {
         try {
-            // 1. Поиск фильма на TMDB
-            String searchUrl = String.format("https://api.themoviedb.org/3/search/movie?query=%s&api_key=%s",
+            String searchUrl = String.format(
+                    "https://api.themoviedb.org/3/search/movie?query=%s&api_key=%s",
                     title.replace(" ", "+"), tmdbApiKey);
 
+            System.out.println("TMDb API request: " + searchUrl);  // лог для отладки
+
             HttpResponse<String> searchResponse = HttpClient.newHttpClient()
-                    .send(HttpRequest.newBuilder().uri(URI.create(searchUrl)).GET().build(),
+                    .send(HttpRequest.newBuilder()
+                            .uri(URI.create(searchUrl))
+                            .GET()
+                            .build(),
                           HttpResponse.BodyHandlers.ofString());
 
             JsonNode searchJson = mapper.readTree(searchResponse.body());
             JsonNode results = searchJson.get("results");
 
             if (results == null || !results.elements().hasNext())
-                throw new RuntimeException("TMDB: Movie not found");
+                throw new RuntimeException("TMDb: Movie not found");
 
-            String posterPath = results.get(0).get("poster_path").asText();
+            JsonNode posterPathNode = results.get(0).get("poster_path");
 
-            // 2. Скачивание изображения
-            String imageUrl = "https://image.tmdb.org/t/p/w780" + posterPath;
+            if (posterPathNode == null || posterPathNode.isNull())
+                throw new RuntimeException("TMDb: Poster not found");
+
+            String imageUrl = "https://image.tmdb.org/t/p/w780" + posterPathNode.asText();
+            System.out.println("Downloading image: " + imageUrl);  // лог для отладки
+
             InputStream imageStream = URI.create(imageUrl).toURL().openStream();
 
-            // 3. Сохранение в файловую систему
             String safeTitle = title.replaceAll("[^a-zA-Z0-9]", "_");
             File dir = new File("images/" + safeTitle);
             Files.createDirectories(dir.toPath());
@@ -55,7 +63,8 @@ public class ImageService {
             return output.getAbsolutePath();
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to fetch image: " + e.getMessage(), e);
+            System.err.println("ImageService failed: " + e.getMessage());
+            return "images/default.jpg";
         }
     }
 }
