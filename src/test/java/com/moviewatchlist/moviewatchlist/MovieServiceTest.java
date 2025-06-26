@@ -1,6 +1,7 @@
 package com.moviewatchlist.moviewatchlist;
 
 import com.moviewatchlist.client.OmdbClient;
+import com.moviewatchlist.client.TmdbClient;
 import com.moviewatchlist.model.Movie;
 import com.moviewatchlist.repository.MovieRepository;
 import com.moviewatchlist.service.ImageService;
@@ -42,6 +43,9 @@ public class MovieServiceTest {
 
     @Mock
     private OmdbClient omdbClient;
+
+     @Mock
+    private TmdbClient tmdbClient; 
 
     @InjectMocks
     private MovieService service;
@@ -132,10 +136,9 @@ public class MovieServiceTest {
     }
 
     /**
-     * Verifies that {@link MovieService#getSimilarMovies(Long)} fetches
-     * a list of similar movie titles by retrieving the TMDB ID and calling
-     * the TMDB similar movies endpoint. Uses a spy to mock internal
-     * calls to {@code fetchTmdbId} and {@code fetchSimilarFromTMDB}.
+     * Verifies that {@link MovieService#getSimilarMovies(Long)}
+     * correctly calls the external client to fetch similar movies
+     * and returns a list of movie titles.
      */
     @Test
     void testGetSimilarMoviesReturnsList() {
@@ -144,16 +147,16 @@ public class MovieServiceTest {
         Movie movie = Movie.builder().id(movieId).title(title).build();
 
         when(repository.findById(movieId)).thenReturn(Optional.of(movie));
+        when(tmdbClient.fetchTmdbId(title)).thenReturn(123L);
+        when(tmdbClient.fetchSimilarMovies(123L)).thenReturn(List.of("Tenet", "The Prestige"));
 
-        MovieService spyService = spy(service);
-
-        doReturn(123L).when(spyService).fetchTmdbId(title);
-        doReturn(List.of("Tenet", "The Prestige")).when(spyService).fetchSimilarFromTMDB(123L);
-
-        List<String> result = spyService.getSimilarMovies(movieId);
+        List<String> result = service.getSimilarMovies(movieId);
 
         assertEquals(2, result.size());
         assertTrue(result.contains("Tenet"));
         assertTrue(result.contains("The Prestige"));
+        verify(tmdbClient).fetchTmdbId(title);
+        verify(tmdbClient).fetchSimilarMovies(123L);
     }
+
 }

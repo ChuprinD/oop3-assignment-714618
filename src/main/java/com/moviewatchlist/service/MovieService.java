@@ -3,6 +3,7 @@ package com.moviewatchlist.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moviewatchlist.client.OmdbClient;
+import com.moviewatchlist.client.TmdbClient;
 import com.moviewatchlist.model.Movie;
 import com.moviewatchlist.repository.MovieRepository;
 
@@ -41,6 +42,7 @@ public class MovieService {
     private final ImageService imageService;
     private final ObjectMapper mapper = new ObjectMapper();
     private final OmdbClient omdbClient;
+    private final TmdbClient tmdbClient;
 
     @Value("${omdb.api.key}")
     private String omdbApiKey;
@@ -55,10 +57,11 @@ public class MovieService {
      * @param imageService service to download movie images
      * @param omdbClient   client to fetch OMDb movie metadata
      */
-    public MovieService(MovieRepository repo, ImageService imageService, OmdbClient omdbClient) {
+    public MovieService(MovieRepository repo, ImageService imageService, OmdbClient omdbClient, TmdbClient tmdbClient) {
         this.repo = repo;
         this.imageService = imageService;
         this.omdbClient = omdbClient;
+        this.tmdbClient = tmdbClient;
     }
 
     /**
@@ -134,67 +137,7 @@ public class MovieService {
     public List<String> getSimilarMovies(Long id) {
         Movie movie = repo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Movie not found"));
-        Long tmdbId = fetchTmdbId(movie.getTitle());
-        return fetchSimilarFromTMDB(tmdbId);
-    }
-
-    /**
-     * Searches for a TMDB movie ID by movie title.
-     *
-     * @param title title of the movie
-     * @return TMDB internal movie ID
-     */
-    public Long fetchTmdbId(String title) {
-        try {
-            String searchUrl = String.format(
-                    "https://api.themoviedb.org/3/search/movie?query=%s&api_key=%s",
-                    URLEncoder.encode(title, StandardCharsets.UTF_8), tmdbApiKey);
-
-            HttpResponse<String> response = HttpClient.newHttpClient()
-                    .send(HttpRequest.newBuilder().uri(URI.create(searchUrl)).GET().build(),
-                            HttpResponse.BodyHandlers.ofString());
-
-            JsonNode root = mapper.readTree(response.body());
-            JsonNode results = root.path("results");
-
-            if (results.isEmpty())
-                throw new RuntimeException("No TMDB results");
-
-            return results.get(0).get("id").asLong();
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to fetch TMDB ID", e);
-        }
-    }
-
-    /**
-     * Fetches titles of similar movies from TMDB API.
-     *
-     * @param tmdbId TMDB movie ID
-     * @return list of similar movie titles
-     */
-    public List<String> fetchSimilarFromTMDB(Long tmdbId) {
-        try {
-            String url = String.format(
-                    "https://api.themoviedb.org/3/movie/%d/similar?api_key=%s",
-                    tmdbId, tmdbApiKey
-            );
-
-            HttpResponse<String> response = HttpClient.newHttpClient()
-                    .send(HttpRequest.newBuilder().uri(URI.create(url)).GET().build(),
-                            HttpResponse.BodyHandlers.ofString());
-
-            JsonNode root = mapper.readTree(response.body());
-            List<String> titles = new ArrayList<>();
-
-            for (JsonNode node : root.path("results")) {
-                titles.add(node.get("title").asText());
-            }
-
-            return titles;
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to fetch similar movies", e);
-        }
+        Long tmdbId = tmdbClient.fetchTmdbId(movie.getTitle());
+        return tmdbClient.fetchSimilarMovies(tmdbId);
     }
 }
