@@ -11,8 +11,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.StreamSupport;
 
 @Component
 public class TmdbClient {
@@ -76,15 +76,14 @@ public class TmdbClient {
             JsonNode root = mapper.readTree(response.body());
             JsonNode results = root.path("results");
 
-            List<String> similarTitles = new ArrayList<>();
-            for (JsonNode node : results) {
-                similarTitles.add(node.get("title").asText());
-            }
-
-            return similarTitles;
+            // Using Java Streams to transform the result into a list of titles
+            return StreamSupport.stream(results.spliterator(), false)
+                    .map(node -> node.path("title").asText())
+                    .toList();
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to fetch similar movies: " + e.getMessage(), e);
         }
     }
+
 }
